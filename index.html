@@ -610,27 +610,28 @@ function handleAtlasError(msg) { addMessage('atlas',msg); setCoreState('idle'); 
 function executeAction(cmd) {
   switch(cmd.action) {
     case 'youtube':
-      if (cmd.query) { addMessage('atlas',`Buscando "${cmd.query}" en YouTube.`); speak(`Buscando ${cmd.query} en YouTube.`); setTimeout(()=>window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(cmd.query)}`,'_blank'),800); }
-      else { showPanel('yt'); addMessage('atlas','YouTube abierto.'); speak('YouTube abierto.'); }
-      break;
+      resumeMusicAfterAtlas(); window.speechSynthesis.cancel();
+      if (cmd.query) { addMessage('atlas',`Buscando "${cmd.query}" en YouTube.`); setTimeout(()=>window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(cmd.query)}`,'_blank'),300); }
+      else { showPanel('yt'); addMessage('atlas','YouTube abierto.'); }
+      setCoreState('idle'); setStatus('LISTO'); break;
     case 'gps':
-      showPanel('gps'); getGPS();
-      if (cmd.destination) { document.getElementById('gps-input').value=cmd.destination; addMessage('atlas',`Navegando hacia ${cmd.destination}.`); speak(`Navegando hacia ${cmd.destination}.`); setTimeout(()=>openMapsNavigation(cmd.destination),800); }
-      else { addMessage('atlas','GPS abierto. ¿A dónde vamos?'); speak('GPS abierto.'); }
-      break;
+      resumeMusicAfterAtlas(); window.speechSynthesis.cancel(); showPanel('gps'); getGPS();
+      if (cmd.destination) { document.getElementById('gps-input').value=cmd.destination; addMessage('atlas',`Navegando hacia ${cmd.destination}.`); setTimeout(()=>openMapsNavigation(cmd.destination),400); }
+      else { addMessage('atlas','GPS abierto.'); }
+      setCoreState('idle'); setStatus('LISTO'); break;
     case 'music_play':
-      userPausedMusic=false; showPanel('music');
-      if (playlist.length) { setTimeout(()=>playIndex(currentIndex),400); addMessage('atlas','Reproduciendo música.'); speak('Reproduciendo música.'); }
+      userPausedMusic=false; showPanel('music'); window.speechSynthesis.cancel();
+      if (playlist.length) { setTimeout(()=>playIndex(currentIndex),400); addMessage('atlas','Reproduciendo música.'); }
       else { addMessage('atlas','No hay canciones cargadas.'); speak('No hay canciones.'); }
-      break;
-    case 'music_next': nextSong(); addMessage('atlas','Siguiente canción.'); resumeMusicAfterAtlas(); break;
-    case 'music_prev': prevSong(); addMessage('atlas','Canción anterior.'); resumeMusicAfterAtlas(); break;
-    case 'music_pause': userPausedMusic=true; audioPlayer.pause(); setPlayBtn(); addMessage('atlas','Música pausada.'); resumeMusicAfterAtlas(); break;
-    case 'music_resume': userPausedMusic=false; audioPlayer.play().catch(()=>{}); setPlayBtn(); addMessage('atlas','Reanudando música.'); break;
+      setCoreState('idle'); setStatus('LISTO'); break;
+    case 'music_next': nextSong(); addMessage('atlas','Siguiente canción.'); resumeMusicAfterAtlas(); setCoreState('idle'); setStatus('LISTO'); break;
+    case 'music_prev': prevSong(); addMessage('atlas','Canción anterior.'); resumeMusicAfterAtlas(); setCoreState('idle'); setStatus('LISTO'); break;
+    case 'music_pause': userPausedMusic=true; audioPlayer.pause(); setPlayBtn(); addMessage('atlas','Música pausada.'); window.speechSynthesis.cancel(); setCoreState('idle'); setStatus('LISTO'); break;
+    case 'music_resume': userPausedMusic=false; audioPlayer.play().catch(()=>{}); setPlayBtn(); addMessage('atlas','Reanudando música.'); window.speechSynthesis.cancel(); setCoreState('idle'); setStatus('LISTO'); break;
     case 'music_delete': deleteSongByVoice(cmd.query||'current'); break;
     case 'deezer_search': searchDeezer(cmd.query||''); break;
-    case 'whatsapp': addMessage('atlas','Abriendo WhatsApp.'); speak('Abriendo WhatsApp.'); setTimeout(()=>window.open('https://wa.me','_blank'),600); break;
-    case 'web': addMessage('atlas','Abriendo en el navegador.'); speak('Abriendo.'); setTimeout(()=>window.open(cmd.url||'https://www.google.com','_blank'),600); break;
+    case 'whatsapp': resumeMusicAfterAtlas(); window.speechSynthesis.cancel(); addMessage('atlas','Abriendo WhatsApp.'); setTimeout(()=>window.open('https://wa.me','_blank'),300); setCoreState('idle'); setStatus('LISTO'); break;
+    case 'web': resumeMusicAfterAtlas(); window.speechSynthesis.cancel(); addMessage('atlas','Abriendo.'); setTimeout(()=>window.open(cmd.url||'https://www.google.com','_blank'),300); setCoreState('idle'); setStatus('LISTO'); break;
     default: if (cmd.reply) { addMessage('atlas',cmd.reply); speak(cmd.reply); }
   }
 }
@@ -733,10 +734,17 @@ async function deleteSongByVoice(query) {
 let musicWasPausedByAtlas = false;
 let userPausedMusic = false;
 function pauseMusicForAtlas() {
-  if (!audioPlayer.paused && playlist.length && !userPausedMusic) { audioPlayer.volume = Math.max(0, audioPlayer.volume-.5); musicWasPausedByAtlas=true; }
+  // Solo baja el volumen, nunca detiene la música
+  if (!audioPlayer.paused && !userPausedMusic) {
+    audioPlayer.volume = Math.max(0.05, audioPlayer.volume * 0.3);
+    musicWasPausedByAtlas = true;
+  }
 }
 function resumeMusicAfterAtlas() {
-  if (musicWasPausedByAtlas && !userPausedMusic) { audioPlayer.volume=parseFloat(document.getElementById('volume-bar').value); musicWasPausedByAtlas=false; }
+  if (musicWasPausedByAtlas && !userPausedMusic) {
+    audioPlayer.volume = parseFloat(document.getElementById('volume-bar').value);
+    musicWasPausedByAtlas = false;
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -862,8 +870,8 @@ async function loadAndSaveFiles(files) {
   for (const f of files) await saveSongToDB(f);
   await refreshPlaylistFromDB();
   showToast(`✓ ${files.length} CANCIÓN(ES) GUARDADAS`);
-  addMessage('atlas',`${playlist.length} canción(es) disponibles.`);
-  if (playlist.length>0) playIndex(0);
+  addMessage('atlas',`${playlist.length} canción(es) disponibles. Di "reproduce música" para escucharlas.`);
+  // NO auto-reproducir al cargar
 }
 async function refreshPlaylistFromDB() {
   const songs=await loadSongsFromDB();
