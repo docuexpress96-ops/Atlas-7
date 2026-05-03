@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#010a14">
+<title>ATLAS — Neural OS v7</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+:root {
+  --cyan: #00e5ff;
+  --cyan2: #0099cc;
+  --gold: #ffd700;
+  --red: #ff3a3a;
+  --green: #00ff88;
+  --dark: #010a14;
+  --panel: rgba(0,229,255,0.04);
+  --border: rgba(0,229,255,0.18);
+  --text: rgba(255,255,255,0.88);
+  --sub: rgba(0,229,255,0.55);
+}
+
+body {
+  background: var(--dark);
+  color: var(--text);
+  font-family: 'Rajdhani', sans-serif;
+  height: 100dvh;
+  overflow: hidden;
+  position: relative;
+  font-size: 15px;
+}
+
+#bgCanvas { position:fixed; inset:0; width:100%; height:100%; z-index:0; }
+.scan-line {
+  position:fixed; top:0; left:0; right:0; bottom:0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,229,255,0.012) 2px, rgba(0,229,255,0.012) 4px);
+  pointer-events:none; z-index:1;
+}
+
+
+
+/* ════════════════ APP ════════════════ */
+#app {
+  position: relative; z-index: 10;
+  height: 100dvh;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 14px 14px 10px;
+  max-width: 480px; margin: 0 auto;
+}
+
+/* HEADER */
+#header {
+  width:100%; display:flex; justify-content:space-between;
+  align-items:center; margin-bottom:6px;
+}
+#logo {
+  font-family:'Orbitron',monospace; font-size:20px; font-weight:900;
+  letter-spacing:10px; color:var(--cyan);
+  text-shadow:0 0 25px var(--cyan), 0 0 50px rgba(0,229,255,0.3);
+}
+#hud-right { display:flex; align-items:center; gap:10px; }
+#time-display {
+  font-family:'Orbitron',monospace; font-size:10px;
+  color:var(--sub); letter-spacing:2px;
+}
+#status-dot {
+  width:8px; height:8px; border-radius:50%;
+  background:var(--green); box-shadow:0 0 12px var(--green);
+  animation:pulseDot 2s infinite;
+}
+@keyframes pulseDot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
+
+/* NÚCLEO */
+#core-wrap { position:relative; width:150px; height:150px; margin:4px 0; flex-shrink:0; }
+#core {
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  width:95px; height:95px; border-radius:50%;
+  border:2px solid var(--cyan);
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:2px;
+  cursor:pointer;
+  box-shadow:0 0 35px rgba(0,229,255,0.25), inset 0 0 25px rgba(0,229,255,0.08);
+  transition:all 0.3s ease;
+  background: radial-gradient(circle at center, rgba(0,229,255,0.05) 0%, transparent 70%);
+}
+#core:active { transform:translate(-50%,-50%) scale(0.95); }
+#core.listening { border-color:var(--red); box-shadow:0 0 50px rgba(255,58,58,0.4), inset 0 0 25px rgba(255,58,58,0.1); animation:coreBreath 0.8s ease-in-out infinite; }
+#core.thinking  { border-color:var(--gold); box-shadow:0 0 40px rgba(255,215,0,0.35), inset 0 0 25px rgba(255,215,0,0.08); }
+#core.speaking  { border-color:var(--green); box-shadow:0 0 45px rgba(0,255,136,0.4), inset 0 0 25px rgba(0,255,136,0.1); animation:coreBreath 0.6s ease-in-out infinite; }
+@keyframes coreBreath { 0%,100%{transform:translate(-50%,-50%) scale(1)} 50%{transform:translate(-50%,-50%) scale(1.06)} }
+
+#core-label { font-family:'Orbitron',monospace; font-size:11px; font-weight:700; letter-spacing:3px; color:var(--cyan); line-height:1; text-shadow:0 0 12px var(--cyan); }
+#core-sub { font-size:8px; letter-spacing:1.5px; color:var(--sub); line-height:1; }
+
+.ring { position:absolute; top:50%; left:50%; border-radius:50%; border:1px solid rgba(0,229,255,0.15); transform:translate(-50%,-50%); }
+.ring-1 { width:120px; height:120px; animation:spin 10s linear infinite; border-style:dashed; }
+.ring-2 { width:138px; height:138px; animation:spin 14s linear infinite reverse; }
+.ring-3 { width:148px; height:148px; animation:spin 20s linear infinite; border-color:rgba(0,229,255,0.06); }
+.orbital { position:absolute; width:5px; height:5px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan); top:50%; left:50%; transform-origin:0 0; }
+.orb1 { animation:orbit1 10s linear infinite; }
+.orb2 { animation:orbit2 14s linear infinite reverse; }
+@keyframes spin { from{transform:translate(-50%,-50%) rotate(0deg)} to{transform:translate(-50%,-50%) rotate(360deg)} }
+@keyframes orbit1 { from{transform:translate(-60px,-60px) rotate(0deg) translate(60px,0) translate(-2.5px,-2.5px)} to{transform:translate(-60px,-60px) rotate(360deg) translate(60px,0) translate(-2.5px,-2.5px)} }
+@keyframes orbit2 { from{transform:translate(-69px,-69px) rotate(0deg) translate(69px,0) translate(-2.5px,-2.5px)} to{transform:translate(-69px,-69px) rotate(360deg) translate(69px,0) translate(-2.5px,-2.5px)} }
+
+#voice-bars { display:flex; gap:2px; align-items:center; height:14px; opacity:0; transition:opacity 0.3s; }
+#voice-bars.active { opacity:1; }
+.vbar { width:2px; border-radius:2px; background:var(--cyan); box-shadow:0 0 4px var(--cyan); }
+.vbar:nth-child(1) { animation:vbar 0.5s ease-in-out infinite alternate; height:4px; }
+.vbar:nth-child(2) { animation:vbar 0.6s ease-in-out infinite alternate 0.1s; height:8px; }
+.vbar:nth-child(3) { animation:vbar 0.4s ease-in-out infinite alternate 0.2s; height:12px; }
+.vbar:nth-child(4) { animation:vbar 0.7s ease-in-out infinite alternate 0.05s; height:8px; }
+.vbar:nth-child(5) { animation:vbar 0.5s ease-in-out infinite alternate 0.15s; height:4px; }
+@keyframes vbar { from{transform:scaleY(0.3)} to{transform:scaleY(1)} }
+
+#status-bar { font-family:'Orbitron',monospace; font-size:9px; letter-spacing:2px; color:var(--sub); margin-bottom:6px; height:14px; text-align:center; transition:all 0.3s; }
+
+/* CHAT */
+#chat {
+  width:100%; flex:1; min-height:0;
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:12px; overflow-y:auto; padding:10px; margin-bottom:8px;
+  display:flex; flex-direction:column; gap:7px; scroll-behavior:smooth;
+}
+#chat::-webkit-scrollbar { width:3px; }
+#chat::-webkit-scrollbar-thumb { background:rgba(0,229,255,0.3); border-radius:3px; }
+
+.msg { max-width:88%; padding:8px 11px; border-radius:10px; font-size:13px; line-height:1.5; animation:slideIn 0.25s ease; }
+@keyframes slideIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.msg.user  { align-self:flex-end; background:rgba(0,229,255,0.12); border:1px solid rgba(0,229,255,0.25); }
+.msg.atlas { align-self:flex-start; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09); }
+.msg.atlas::before { content:"ATLAS ▸ "; color:var(--cyan); font-family:'Orbitron',monospace; font-size:9px; font-weight:700; letter-spacing:1px; display:block; margin-bottom:3px; }
+
+/* APPS GRID */
+#apps-grid { width:100%; display:grid; grid-template-columns:repeat(5,1fr); gap:5px; margin-bottom:8px; }
+.app-btn {
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:10px; padding:7px 2px;
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  cursor:pointer; transition:all 0.2s;
+  color:rgba(255,255,255,0.7); font-size:9px;
+  font-family:'Rajdhani',sans-serif; letter-spacing:0.5px; font-weight:600;
+  user-select:none;
+}
+.app-btn .icon { font-size:16px; line-height:1; }
+.app-btn:active, .app-btn.active { background:rgba(0,229,255,0.15); border-color:var(--cyan); color:var(--cyan); box-shadow:0 0 12px rgba(0,229,255,0.25); }
+
+/* PANELS */
+.panel { display:none; width:100%; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:10px; margin-bottom:8px; animation:slideIn 0.2s ease; }
+.panel.visible { display:block; }
+.panel-title { font-family:'Orbitron',monospace; font-size:9px; color:var(--cyan); letter-spacing:2px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+.panel-close { cursor:pointer; color:var(--sub); font-size:14px; padding:0 4px; }
+
+/* MÚSICA */
+#playlist { max-height:90px; overflow-y:auto; margin-bottom:8px; }
+#playlist::-webkit-scrollbar { width:2px; }
+#playlist::-webkit-scrollbar-thumb { background:rgba(0,229,255,0.3); }
+.playlist-item { padding:4px 8px; border-radius:5px; font-size:11px; cursor:pointer; transition:all 0.15s; color:rgba(255,255,255,0.65); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; justify-content:space-between; align-items:center; }
+.playlist-item:hover { background:rgba(0,229,255,0.08); }
+.playlist-item.playing { background:rgba(0,229,255,0.12); color:var(--cyan); }
+.playlist-item .del-song { color:var(--red); font-size:13px; padding:0 4px; opacity:0.6; flex-shrink:0; }
+.playlist-item .del-song:hover { opacity:1; }
+#now-playing { font-size:12px; color:var(--text); margin-bottom:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.music-controls { display:flex; align-items:center; gap:6px; }
+.ctrl-btn { background:none; border:1px solid var(--border); color:var(--cyan); padding:5px 9px; border-radius:7px; cursor:pointer; font-size:13px; transition:all 0.2s; }
+.ctrl-btn:active { background:rgba(0,229,255,0.15); }
+.ctrl-btn.shuffle-on { background:rgba(0,229,255,0.18); border-color:var(--cyan); box-shadow:0 0 10px rgba(0,229,255,0.3); }
+#volume-bar { flex:1; accent-color:var(--cyan); }
+label.load-btn { background:rgba(0,229,255,0.1); border:1px solid var(--border); color:var(--cyan); padding:5px 9px; border-radius:7px; cursor:pointer; font-size:10px; font-family:'Rajdhani',sans-serif; font-weight:600; letter-spacing:0.5px; transition:all 0.2s; }
+label.load-btn:active { background:rgba(0,229,255,0.2); }
+.music-count { font-size:10px; color:var(--sub); margin-bottom:4px; }
+
+/* GPS */
+.gps-row { display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+#gps-input { flex:1; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:#fff; padding:7px 10px; border-radius:7px; font-family:'Rajdhani',sans-serif; font-size:13px; outline:none; }
+#gps-input::placeholder { color:rgba(255,255,255,0.3); }
+.go-btn { background:rgba(0,229,255,0.12); border:1px solid var(--cyan); color:var(--cyan); padding:7px 12px; border-radius:7px; cursor:pointer; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:2px; transition:all 0.2s; }
+.go-btn:active { background:rgba(0,229,255,0.25); }
+#gps-coords { font-size:11px; color:var(--sub); }
+
+/* YOUTUBE */
+#yt-search-input { width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:#fff; padding:7px 10px; border-radius:7px; font-family:'Rajdhani',sans-serif; font-size:13px; outline:none; margin-bottom:8px; }
+#yt-search-input::placeholder { color:rgba(255,255,255,0.3); }
+.yt-btn { width:100%; background:rgba(255,0,0,0.12); border:1px solid rgba(255,0,0,0.35); color:#ff4444; padding:7px; border-radius:7px; cursor:pointer; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:2px; transition:all 0.2s; }
+.yt-btn:active { background:rgba(255,0,0,0.22); }
+
+/* CONTROLES */
+#controls { width:100%; display:flex; gap:7px; align-items:center; }
+#text-input { flex:1; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:10px 13px; color:#fff; font-family:'Rajdhani',sans-serif; font-size:14px; outline:none; transition:border 0.2s; }
+#text-input:focus { border-color:rgba(0,229,255,0.4); }
+#text-input::placeholder { color:rgba(255,255,255,0.25); }
+#send-btn, #mic-btn, #stop-btn { width:44px; height:44px; border-radius:10px; border:1px solid var(--border); background:var(--panel); color:var(--cyan); font-size:17px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; flex-shrink:0; }
+#send-btn:active { background:rgba(0,229,255,0.15); }
+#stop-btn { color:var(--red); border-color:rgba(255,58,58,0.3); }
+#stop-btn:active { background:rgba(255,58,58,0.15); }
+#mic-btn.active { background:rgba(255,58,58,0.15); border-color:var(--red); color:var(--red); }
+
+/* TOAST */
+#toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%) translateY(20px); background:rgba(0,229,255,0.15); border:1px solid var(--cyan); color:var(--cyan); padding:8px 16px; border-radius:20px; font-family:'Orbitron',monospace; font-size:9px; letter-spacing:2px; opacity:0; transition:all 0.3s; z-index:100; white-space:nowrap; }
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<canvas id="bgCanvas"></canvas>
+<div class="scan-line"></div>
+<div id="toast"></div>
+<audio id="audioPlayer"></audio>
+<input type="file" id="file-input" accept="audio/*" multiple style="display:none;">
+<input type="file" id="folder-input" accept="audio/*" multiple webkitdirectory style="display:none;">
+
+<div id="avatar-wrap" style="display:none">
+  <div id="avatar-bg"></div>
+  <div id="avatar-scanline"></div>
+  <svg id="avatar-svg" viewBox="0 0 120 140" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <!-- Glow filter cyan -->
+      <filter id="glow-cyan" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="2.5" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <!-- Glow fuerte -->
+      <filter id="glow-strong" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="4" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <!-- Gradiente de la cara -->
+      <radialGradient id="faceGrad" cx="50%" cy="45%" r="55%">
+        <stop offset="0%" stop-color="#0d2a3a"/>
+        <stop offset="100%" stop-color="#010a14"/>
+      </radialGradient>
+      <!-- Gradiente iris -->
+      <radialGradient id="irisGrad" cx="40%" cy="35%" r="60%">
+        <stop offset="0%" stop-color="#00ffff"/>
+        <stop offset="60%" stop-color="#0077aa"/>
+        <stop offset="100%" stop-color="#003355"/>
+      </radialGradient>
+    </defs>
+
+    <!-- ── Cuello / base ── -->
+    <rect x="47" y="108" width="26" height="18" rx="5" fill="#051520" opacity="0.8"/>
+    <line x1="60" y1="108" x2="60" y2="126" stroke="#00e5ff" stroke-width="0.5" opacity="0.3"/>
+
+    <!-- ── Cabeza ── -->
+    <ellipse id="head" cx="60" cy="68" rx="38" ry="44" fill="url(#faceGrad)" stroke="#00e5ff" stroke-width="0.8" opacity="0.9" filter="url(#glow-cyan)"/>
+
+    <!-- Líneas de circuito en la cabeza -->
+    <line x1="22" y1="60" x2="35" y2="60" stroke="#00e5ff" stroke-width="0.4" opacity="0.3"/>
+    <line x1="85" y1="60" x2="98" y2="60" stroke="#00e5ff" stroke-width="0.4" opacity="0.3"/>
+    <line x1="35" y1="55" x2="35" y2="65" stroke="#00e5ff" stroke-width="0.4" opacity="0.3"/>
+    <line x1="85" y1="55" x2="85" y2="65" stroke="#00e5ff" stroke-width="0.4" opacity="0.3"/>
+
+    <!-- ── Cejas ── -->
+    <path id="brow-left"  d="M 37 52 Q 45 49 52 51" stroke="#00e5ff" stroke-width="1.5" fill="none" stroke-linecap="round" filter="url(#glow-cyan)" opacity="0.9"/>
+    <path id="brow-right" d="M 68 51 Q 75 49 83 52" stroke="#00e5ff" stroke-width="1.5" fill="none" stroke-linecap="round" filter="url(#glow-cyan)" opacity="0.9"/>
+
+    <!-- ── Ojos ── -->
+    <!-- Ojo izquierdo: sockets -->
+    <ellipse cx="45" cy="64" rx="10" ry="8" fill="#030f1a" stroke="#00e5ff" stroke-width="0.8" opacity="0.6"/>
+    <!-- Iris izquierdo -->
+    <ellipse id="iris-left" cx="45" cy="64" rx="7" ry="6" fill="url(#irisGrad)" filter="url(#glow-cyan)"/>
+    <!-- Pupila izq -->
+    <ellipse id="pupil-left" cx="45" cy="64" rx="3" ry="3" fill="#000a14"/>
+    <!-- Brillo izq -->
+    <ellipse cx="47" cy="62" rx="1.5" ry="1.2" fill="white" opacity="0.8"/>
+    <!-- Párpado izquierdo (se anima al cerrar) -->
+    <ellipse id="lid-left" cx="45" cy="64" rx="10" ry="0" fill="#030f1a"/>
+
+    <!-- Ojo derecho -->
+    <ellipse cx="75" cy="64" rx="10" ry="8" fill="#030f1a" stroke="#00e5ff" stroke-width="0.8" opacity="0.6"/>
+    <ellipse id="iris-right" cx="75" cy="64" rx="7" ry="6" fill="url(#irisGrad)" filter="url(#glow-cyan)"/>
+    <ellipse id="pupil-right" cx="75" cy="64" rx="3" ry="3" fill="#000a14"/>
+    <ellipse cx="77" cy="62" rx="1.5" ry="1.2" fill="white" opacity="0.8"/>
+    <ellipse id="lid-right" cx="75" cy="64" rx="10" ry="0" fill="#030f1a"/>
+
+    <!-- ── Nariz ── -->
+    <path d="M 58 72 L 56 80 Q 60 82 64 80 L 62 72" stroke="#00e5ff" stroke-width="0.6" fill="none" opacity="0.4" stroke-linecap="round"/>
+
+    <!-- ── Boca ── -->
+    <!-- Contorno boca -->
+    <path id="mouth-outline" d="M 47 90 Q 60 96 73 90" stroke="#00e5ff" stroke-width="0.8" fill="none" stroke-linecap="round" opacity="0.6"/>
+    <!-- Interior boca (abre al hablar) -->
+    <clipPath id="mouth-clip">
+      <ellipse id="mouth-clip-ellipse" cx="60" cy="91" rx="13" ry="0"/>
+    </clipPath>
+    <ellipse id="mouth-open" cx="60" cy="92" rx="13" ry="0" fill="#001a2a" stroke="#00e5ff" stroke-width="0.8"/>
+    <!-- Dientes superiores -->
+    <rect id="teeth-top" x="51" y="91" width="18" height="3" rx="1.5" fill="rgba(0,229,255,0.15)" opacity="0"/>
+    <!-- Dientes inferiores -->
+    <rect id="teeth-bot" x="51" y="96" width="18" height="2" rx="1" fill="rgba(0,229,255,0.1)" opacity="0"/>
+
+    <!-- ── Líneas de datos en frente ── -->
+    <line x1="38" y1="38" x2="82" y2="38" stroke="#00e5ff" stroke-width="0.4" opacity="0.2"/>
+    <line x1="42" y1="34" x2="78" y2="34" stroke="#00e5ff" stroke-width="0.3" opacity="0.15"/>
+
+    <!-- ── Hexágono decorativo en frente ── -->
+    <polygon points="60,26 68,31 68,41 60,46 52,41 52,31" fill="none" stroke="#00e5ff" stroke-width="0.5" opacity="0.25" filter="url(#glow-cyan)"/>
+    <circle cx="60" cy="36" r="3" fill="#00e5ff" opacity="0.4" filter="url(#glow-strong)"/>
+
+    <!-- ── Marcadores laterales ── -->
+    <circle cx="22" cy="68" r="2" fill="#00e5ff" opacity="0.5" filter="url(#glow-cyan)"/>
+    <circle cx="98" cy="68" r="2" fill="#00e5ff" opacity="0.5" filter="url(#glow-cyan)"/>
+    <line x1="24" y1="68" x2="30" y2="68" stroke="#00e5ff" stroke-width="0.5" opacity="0.4"/>
+    <line x1="90" y1="68" x2="96" y2="68" stroke="#00e5ff" stroke-width="0.5" opacity="0.4"/>
+  </svg>
+  <div id="avatar-label">ATLAS · v7</div>
+</div>
+
+<div id="app">
+
+  <!-- HEADER -->
+  <div id="header">
+    <div id="logo">ATLAS</div>
+    <div id="hud-right">
+      <div id="time-display">--:--</div>
+      <div id="status-dot"></div>
+    </div>
+  </div>
+
+  <!-- NÚCLEO -->
+  <div id="core-wrap">
+    <div class="ring ring-1"></div>
+    <div class="ring ring-2"></div>
+    <div class="ring ring-3"></div>
+    <div class="orbital orb1"></div>
+    <div class="orbital orb2"></div>
+    <div id="core" onclick="toggleVoice()">
+      <div id="core-label">ATLAS</div>
+      <div id="core-sub">NEURAL OS</div>
+      <div id="voice-bars">
+        <div class="vbar"></div><div class="vbar"></div>
+        <div class="vbar"></div><div class="vbar"></div>
+        <div class="vbar"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="status-bar">SISTEMA LISTO</div>
+
+  <!-- CHAT -->
+  <div id="chat">
+    <div class="msg atlas">Núcleo ATLAS v7 en línea. Sistema neural activo. Dime lo que necesitas.</div>
+  </div>
+
+  <!-- BOTONES APP -->
+  <div id="apps-grid">
+    <div class="app-btn" id="btn-music" onclick="togglePanel('music')">
+      <span class="icon">🎵</span><span>Música</span>
+    </div>
+    <div class="app-btn" id="btn-gps" onclick="togglePanel('gps')">
+      <span class="icon">📍</span><span>GPS</span>
+    </div>
+    <div class="app-btn" id="btn-yt" onclick="togglePanel('yt')">
+      <span class="icon">▶️</span><span>YouTube</span>
+    </div>
+    <div class="app-btn" onclick="openWhatsApp()">
+      <span class="icon">💬</span><span>WhatsApp</span>
+    </div>
+    <div class="app-btn" onclick="openChrome()">
+      <span class="icon">🌐</span><span>Web</span>
+    </div>
+  </div>
+
+  <!-- PANEL MÚSICA -->
+  <div class="panel" id="music-panel">
+    <div class="panel-title">◈ REPRODUCTOR NEURAL <span class="panel-close" onclick="togglePanel('music')">✕</span></div>
+    <div id="now-playing">Sin canciones cargadas</div>
+    <div class="music-count" id="music-count"></div>
+    <div id="playlist"></div>
+    <div class="music-controls">
+      <button class="ctrl-btn" onclick="prevSong()">⏮</button>
+      <button class="ctrl-btn" id="play-btn" onclick="togglePlay()">▶</button>
+      <button class="ctrl-btn" onclick="nextSong()">⏭</button>
+      <button class="ctrl-btn" id="shuffle-btn" onclick="toggleShuffle()">🔀</button>
+      <input type="range" id="volume-bar" min="0" max="1" step="0.05" value="0.8" oninput="setVolume(this.value)">
+    </div>
+    <div class="music-controls" style="margin-top:6px;gap:4px;">
+      <label class="load-btn" for="file-input">⊕ Canciones</label>
+      <label class="load-btn" for="folder-input">📁 Carpeta</label>
+      <button class="ctrl-btn" onclick="clearAllMusic()" style="color:var(--red);border-color:rgba(255,58,58,0.3);font-size:10px;padding:5px 7px;">🗑 Limpiar</button>
+    </div>
+  </div>
+
+  <!-- PANEL GPS -->
+  <div class="panel" id="gps-panel">
+    <div class="panel-title">◈ NAVEGACIÓN GPS <span class="panel-close" onclick="togglePanel('gps')">✕</span></div>
+    <div class="gps-row">
+      <input id="gps-input" type="text" placeholder="¿A dónde vamos?">
+      <button class="go-btn" onclick="navigateTo()">IR</button>
+    </div>
+    <a href="https://maps.google.com" target="_blank" rel="noopener"
+      style="display:block;text-align:center;padding:7px;margin-bottom:7px;background:rgba(0,229,255,0.1);border:1px solid rgba(0,229,255,0.35);border-radius:7px;color:var(--cyan);font-family:'Orbitron',monospace;font-size:9px;letter-spacing:2px;text-decoration:none;">⬡ ABRIR GOOGLE MAPS</a>
+    <div id="gps-coords">Obteniendo ubicación...</div>
+  </div>
+
+  <!-- PANEL YOUTUBE -->
+  <div class="panel" id="yt-panel">
+    <div class="panel-title">◈ YOUTUBE SEARCH <span class="panel-close" onclick="togglePanel('yt')">✕</span></div>
+    <input id="yt-search-input" type="text" placeholder="¿Qué deseas buscar?">
+    <button class="yt-btn" onclick="searchYouTube()">▶ BUSCAR EN YOUTUBE</button>
+  </div>
+
+  <!-- CONTROLES -->
+  <div id="controls">
+    <input id="text-input" type="text" placeholder="Habla o escribe..." onkeydown="if(event.key==='Enter')sendText()">
+    <button id="send-btn" onclick="sendText()">➤</button>
+    <button id="stop-btn" onclick="stopVoice()">🔇</button>
+    <button id="mic-btn" onclick="toggleVoice()">🎤</button>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════════════════
+const GROQ_KEY = "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";
+const MODEL    = "llama-3.3-70b-versatile";
+
+const SYSTEM_PROMPT = `Eres ATLAS, un asistente IA como Jarvis. SIEMPRE en español. Respuestas cortas y directas, máximo 2 oraciones. Sin emojis. Sin explicar limitaciones.
+
+IMPORTANTE: Cuando el usuario pida abrir apps, navegar, buscar en YouTube, GPS, música, WhatsApp u otras acciones del sistema, responde con un JSON especial así:
+{"action":"youtube","query":"armonia 10"}
+{"action":"gps","destination":"calle tacna moquegua"}
+{"action":"music_play"}
+{"action":"music_next"}
+{"action":"music_pause"}
+{"action":"music_prev"}
+{"action":"music_delete","query":"nombre de canción"}
+{"action":"deezer_search","query":"artista o canción a buscar"}
+{"action":"whatsapp"}
+{"action":"web","url":"https://google.com/search?q=QUERY"}
+{"action":"none","reply":"tu respuesta normal aquí"}
+
+Ejemplos:
+- "abre youtube" → {"action":"youtube","query":""}
+- "busca armonía 10 en youtube" → {"action":"youtube","query":"armonia 10"}
+- "busca trabajo en moquegua" → {"action":"web","url":"https://www.google.com/search?q=trabajo+en+moquegua"}
+- "navega a calle tacna" → {"action":"gps","destination":"calle tacna"}
+- "pon música" → {"action":"music_play"}
+- "siguiente canción" → {"action":"music_next"}
+- "pausa" → {"action":"music_pause"}
+- "elimina esa canción" → {"action":"music_delete","query":"current"}
+- "elimina la canción X" → {"action":"music_delete","query":"X"}
+- "busca canciones de armonía 10 y reproduce" → {"action":"deezer_search","query":"armonia 10"}
+- "reproduce música de bad bunny" → {"action":"deezer_search","query":"bad bunny"}
+- "pon canciones de salsa" → {"action":"deezer_search","query":"salsa"}
+- "abre whatsapp" → {"action":"whatsapp"}
+- "cómo estás" → {"action":"none","reply":"Sistemas al cien por ciento."}
+
+SIEMPRE responde con JSON. Sin texto extra.`;
+
+let conversationHistory = [];
+
+// ══════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ══════════════════════════════════════════════════════
+// IndexedDB — MÚSICA PERSISTENTE
+// ══════════════════════════════════════════════════════
+let db = null;
+function initDB() {
+  return new Promise(resolve => {
+    const req = indexedDB.open('AtlasMusicDB', 1);
+    req.onupgradeneeded = e => {
+      if (!e.target.result.objectStoreNames.contains('songs'))
+        e.target.result.createObjectStore('songs', { keyPath:'id', autoIncrement:true });
+    };
+    req.onsuccess = e => { db = e.target.result; resolve(); };
+    req.onerror   = () => resolve();
+  });
+}
+function saveSongToDB(file) {
+  return new Promise(resolve => {
+    if (!db) return resolve();
+    const reader = new FileReader();
+    reader.onload = e => {
+      const tx = db.transaction('songs','readwrite');
+      tx.objectStore('songs').add({ name: file.name.replace(/\.[^/.]+$/,''), data: e.target.result, type: file.type });
+      tx.oncomplete = resolve; tx.onerror = resolve;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function loadSongsFromDB() {
+  return new Promise(resolve => {
+    if (!db) return resolve([]);
+    const req = db.transaction('songs','readonly').objectStore('songs').getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror   = () => resolve([]);
+  });
+}
+function deleteSongFromDB(id) {
+  return new Promise(resolve => {
+    if (!db) return resolve();
+    const tx = db.transaction('songs','readwrite');
+    tx.objectStore('songs').delete(id);
+    tx.oncomplete = resolve;
+  });
+}
+function clearAllSongsFromDB() {
+  return new Promise(resolve => {
+    if (!db) return resolve();
+    const tx = db.transaction('songs','readwrite');
+    tx.objectStore('songs').clear();
+    tx.oncomplete = resolve;
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// RELOJ
+// ══════════════════════════════════════════════════════
+function updateClock() {
+  const d = new Date();
+  document.getElementById('time-display').textContent =
+    String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+updateClock(); setInterval(updateClock, 1000);
+
+// ══════════════════════════════════════════════════════
+// CANVAS BG
+// ══════════════════════════════════════════════════════
+const canvas = document.getElementById('bgCanvas');
+const ctx    = canvas.getContext('2d');
+let nodes = [];
+function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+function initNodes() {
+  nodes = [];
+  for (let i=0;i<45;i++) nodes.push({ x:Math.random()*canvas.width, y:Math.random()*canvas.height, vx:(Math.random()-.5)*.25, vy:(Math.random()-.5)*.25, r:Math.random()*1.5+.5 });
+}
+function drawBg() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for (let i=0;i<nodes.length;i++) for (let j=i+1;j<nodes.length;j++) {
+    const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y, d=Math.sqrt(dx*dx+dy*dy);
+    if (d<110) { ctx.beginPath(); ctx.strokeStyle=`rgba(0,229,255,${.07*(1-d/110)})`; ctx.lineWidth=.5; ctx.moveTo(nodes[i].x,nodes[i].y); ctx.lineTo(nodes[j].x,nodes[j].y); ctx.stroke(); }
+  }
+  nodes.forEach(n=>{ ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fillStyle='rgba(0,229,255,0.35)'; ctx.fill(); n.x+=n.vx; n.y+=n.vy; if(n.x<0||n.x>canvas.width)n.vx*=-1; if(n.y<0||n.y>canvas.height)n.vy*=-1; });
+  requestAnimationFrame(drawBg);
+}
+resizeCanvas(); initNodes(); drawBg();
+window.addEventListener('resize',()=>{ resizeCanvas(); initNodes(); });
+
+// ══════════════════════════════════════════════════════
+// CORE STATES — sincroniza avatar
+// ══════════════════════════════════════════════════════
+function setCoreState(state) {
+  const core = document.getElementById('core');
+  const bars = document.getElementById('voice-bars');
+  core.className = state !== 'idle' ? state : '';
+  bars.className = (state==='listening'||state==='speaking') ? 'active' : '';
+
+
+}
+function setStatus(t) { document.getElementById('status-bar').textContent = t; }
+
+// ══════════════════════════════════════════════════════
+// CHAT
+// ══════════════════════════════════════════════════════
+function addMessage(from, text) {
+  const chat = document.getElementById('chat');
+  const div  = document.createElement('div');
+  div.className = `msg ${from}`;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// ══════════════════════════════════════════════════════
+// ATLAS IA
+// ══════════════════════════════════════════════════════
+async function askAtlas(userMessage) {
+  setStatus('PROCESANDO...'); setCoreState('thinking'); pauseMusicForAtlas();
+  conversationHistory.push({ role:'user', content:userMessage });
+  if (conversationHistory.length > 20) conversationHistory = conversationHistory.slice(-20);
+  try {
+    const res  = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${GROQ_KEY}` },
+      body: JSON.stringify({ model:MODEL, messages:[{ role:'system', content:SYSTEM_PROMPT }, ...conversationHistory], temperature:0.3, max_tokens:200 })
+    });
+    const data = await res.json();
+    if (data.error) { handleAtlasError('Error de servicio.'); return; }
+    const raw = data.choices[0].message.content.trim();
+    conversationHistory.push({ role:'assistant', content:raw });
+    let parsed = null;
+    try { const m = raw.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]); } catch(e) {}
+    if (parsed && parsed.action && parsed.action !== 'none') executeAction(parsed);
+    else if (parsed && parsed.action === 'none') { addMessage('atlas', parsed.reply||raw); speak(parsed.reply||raw); }
+    else { addMessage('atlas', raw); speak(raw); }
+  } catch(e) { handleAtlasError('Sin conexión. Verifica tu internet.'); }
+}
+function handleAtlasError(msg) { addMessage('atlas',msg); setCoreState('idle'); setStatus('ERROR'); resumeMusicAfterAtlas(); }
+
+// ══════════════════════════════════════════════════════
+// ACCIONES
+// ══════════════════════════════════════════════════════
+function executeAction(cmd) {
+  switch(cmd.action) {
+    case 'youtube':
+      if (cmd.query) { addMessage('atlas',`Buscando "${cmd.query}" en YouTube.`); speak(`Buscando ${cmd.query} en YouTube.`); setTimeout(()=>window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(cmd.query)}`,'_blank'),800); }
+      else { showPanel('yt'); addMessage('atlas','YouTube abierto.'); speak('YouTube abierto.'); }
+      break;
+    case 'gps':
+      showPanel('gps'); getGPS();
+      if (cmd.destination) { document.getElementById('gps-input').value=cmd.destination; addMessage('atlas',`Navegando hacia ${cmd.destination}.`); speak(`Navegando hacia ${cmd.destination}.`); setTimeout(()=>openMapsNavigation(cmd.destination),800); }
+      else { addMessage('atlas','GPS abierto. ¿A dónde vamos?'); speak('GPS abierto.'); }
+      break;
+    case 'music_play':
+      userPausedMusic=false; showPanel('music');
+      if (playlist.length) { setTimeout(()=>playIndex(currentIndex),400); addMessage('atlas','Reproduciendo música.'); speak('Reproduciendo música.'); }
+      else { addMessage('atlas','No hay canciones cargadas.'); speak('No hay canciones.'); }
+      break;
+    case 'music_next': nextSong(); addMessage('atlas','Siguiente canción.'); resumeMusicAfterAtlas(); break;
+    case 'music_prev': prevSong(); addMessage('atlas','Canción anterior.'); resumeMusicAfterAtlas(); break;
+    case 'music_pause': userPausedMusic=true; audioPlayer.pause(); setPlayBtn(); addMessage('atlas','Música pausada.'); resumeMusicAfterAtlas(); break;
+    case 'music_resume': userPausedMusic=false; audioPlayer.play().catch(()=>{}); setPlayBtn(); addMessage('atlas','Reanudando música.'); break;
+    case 'music_delete': deleteSongByVoice(cmd.query||'current'); break;
+    case 'deezer_search': searchDeezer(cmd.query||''); break;
+    case 'whatsapp': addMessage('atlas','Abriendo WhatsApp.'); speak('Abriendo WhatsApp.'); setTimeout(()=>window.open('https://wa.me','_blank'),600); break;
+    case 'web': addMessage('atlas','Abriendo en el navegador.'); speak('Abriendo.'); setTimeout(()=>window.open(cmd.url||'https://www.google.com','_blank'),600); break;
+    default: if (cmd.reply) { addMessage('atlas',cmd.reply); speak(cmd.reply); }
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// DEEZER — BÚSQUEDA Y REPRODUCCIÓN
+// ══════════════════════════════════════════════════════
+let deezerPlaylist = [];
+let deezerIndex    = 0;
+let deezerMode     = false;
+
+async function searchDeezer(query) {
+  if (!query) { addMessage('atlas','¿Qué artista o canción busco?'); speak('¿Qué artista o canción busco?'); return; }
+  setCoreState('thinking'); setStatus('BUSCANDO EN DEEZER...');
+  addMessage('atlas', `Buscando "${query}" en Deezer...`);
+  showPanel('music');
+  try {
+    const url = `https://api.deezer.com/search?q=${encodeURIComponent(query)}&limit=20&output=jsonp&callback=deezerCallback`;
+    window._deezerResolve = null;
+    const p = new Promise(res => { window.deezerCallback = data => res(data); });
+    const s = document.createElement('script'); s.src = url; document.head.appendChild(s);
+    const data = await Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))]);
+    document.head.removeChild(s);
+    const tracks = (data.data || []).filter(t => t.preview);
+    if (!tracks.length) {
+      addMessage('atlas', 'No encontré canciones con preview disponible.'); speak('No encontré canciones disponibles.'); setCoreState('idle'); setStatus('LISTO'); return;
+    }
+    deezerMode    = true;
+    deezerPlaylist = tracks;
+    deezerIndex    = 0;
+    // Mostrar en el panel como playlist temporal
+    const pl = document.getElementById('playlist');
+    pl.innerHTML = '';
+    tracks.forEach((t, i) => {
+      const div = document.createElement('div');
+      div.className = 'playlist-item' + (i === 0 ? ' playing' : '');
+      div.innerHTML = `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${i+1}. ${t.title} — ${t.artist.name}</span>`;
+      div.onclick = () => playDeezer(i);
+      pl.appendChild(div);
+    });
+    document.getElementById('music-count').textContent = `${tracks.length} canciones de Deezer (30 seg preview)`;
+    playDeezer(0);
+    addMessage('atlas', `Encontré ${tracks.length} canciones. Reproduciendo "${tracks[0].title}" de ${tracks[0].artist.name}.`);
+    speak(`Reproduciendo ${tracks[0].title} de ${tracks[0].artist.name}.`);
+  } catch(e) {
+    addMessage('atlas', 'No pude conectar con Deezer. Verifica tu internet.'); speak('Error al buscar en Deezer.'); setCoreState('idle'); setStatus('ERROR');
+  }
+}
+
+function playDeezer(i) {
+  if (!deezerPlaylist.length) return;
+  deezerIndex = (i + deezerPlaylist.length) % deezerPlaylist.length;
+  const track = deezerPlaylist[deezerIndex];
+  audioPlayer.src = track.preview;
+  audioPlayer.volume = parseFloat(document.getElementById('volume-bar').value);
+  audioPlayer.play().catch(()=>{});
+  document.getElementById('now-playing').textContent = `♪ ${track.title} — ${track.artist.name}`;
+  // Actualizar resaltado en lista
+  document.querySelectorAll('#playlist .playlist-item').forEach((el,idx) => {
+    el.classList.toggle('playing', idx === deezerIndex);
+  });
+}
+
+// Sobreescribir onended para respetar modo Deezer
+function handleSongEnd() {
+  if (deezerMode) {
+    const next = (deezerIndex + 1) % deezerPlaylist.length;
+    playDeezer(next);
+  } else {
+    nextSong();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// ELIMINAR POR VOZ
+// ══════════════════════════════════════════════════════
+async function deleteSongByVoice(query) {
+  if (!playlist.length) { addMessage('atlas','No hay canciones.'); speak('No hay canciones.'); return; }
+  let idx = -1;
+  if (query==='current'||/esa|esta|actual/i.test(query)) idx = currentIndex;
+  else {
+    const q = query.toLowerCase();
+    idx = playlist.findIndex(s => s.name.toLowerCase().includes(q));
+    if (idx===-1) {
+      const words = q.split(' ').filter(w=>w.length>2);
+      idx = playlist.findIndex(s => words.some(w=>s.name.toLowerCase().includes(w)));
+    }
+  }
+  if (idx===-1) { addMessage('atlas',`No encontré la canción "${query}".`); speak('No encontré esa canción.'); return; }
+  const name = playlist[idx].name;
+  await deleteSongFromDB(playlist[idx].dbId);
+  if (idx===currentIndex) { audioPlayer.pause(); audioPlayer.src=''; document.getElementById('now-playing').textContent='Sin canciones'; }
+  await refreshPlaylistFromDB();
+  addMessage('atlas',`"${name}" eliminada.`); speak('Canción eliminada.'); showToast('CANCIÓN ELIMINADA');
+}
+
+// ══════════════════════════════════════════════════════
+// MÚSICA DUCKING
+// ══════════════════════════════════════════════════════
+let musicWasPausedByAtlas = false;
+let userPausedMusic = false;
+function pauseMusicForAtlas() {
+  if (!audioPlayer.paused && playlist.length && !userPausedMusic) { audioPlayer.volume = Math.max(0, audioPlayer.volume-.5); musicWasPausedByAtlas=true; }
+}
+function resumeMusicAfterAtlas() {
+  if (musicWasPausedByAtlas && !userPausedMusic) { audioPlayer.volume=parseFloat(document.getElementById('volume-bar').value); musicWasPausedByAtlas=false; }
+}
+
+// ══════════════════════════════════════════════════════
+// TTS
+// ══════════════════════════════════════════════════════
+function speak(text) {
+  window.speechSynthesis.cancel();
+  if (recognition && isListening) { try { recognition.stop(); } catch(e){} isListening=false; }
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang='es-ES'; utter.rate=1.0; utter.pitch=0.9;
+  utter.onstart = () => { setCoreState('speaking'); setStatus('HABLANDO...'); };
+  utter.onend   = () => {
+    setCoreState('idle'); resumeMusicAfterAtlas();
+    if (continuousMode) { wakeWordMode=true; waitingCommand=false; setStatus('EN ESPERA — DI "ATLAS"'); setTimeout(()=>{ if(continuousMode) startListening(true); },800); }
+    else setStatus('LISTO');
+  };
+  const voices = window.speechSynthesis.getVoices();
+  const es = voices.find(v=>v.lang.startsWith('es')&&/male|hombre/i.test(v.name)) || voices.find(v=>v.lang.startsWith('es'));
+  if (es) utter.voice = es;
+  window.speechSynthesis.speak(utter);
+}
+window.speechSynthesis.onvoiceschanged = ()=>window.speechSynthesis.getVoices();
+
+function stopVoice() { window.speechSynthesis.cancel(); setCoreState('idle'); setStatus('LISTO'); }
+
+// ══════════════════════════════════════════════════════
+// TEXTO MANUAL
+// ══════════════════════════════════════════════════════
+function sendText() {
+  const input = document.getElementById('text-input');
+  const text  = input.value.trim();
+  if (!text) return;
+  addMessage('user',text); input.value=''; askAtlas(text);
+}
+
+// ══════════════════════════════════════════════════════
+// RECONOCIMIENTO DE VOZ
+// ══════════════════════════════════════════════════════
+let recognition=null, isListening=false, continuousMode=false, wakeWordMode=true, waitingCommand=false;
+
+function toggleVoice() {
+  if (continuousMode) {
+    continuousMode=false; wakeWordMode=true; waitingCommand=false; isListening=false;
+    recognition&&recognition.stop();
+    setCoreState('idle'); setStatus('LISTO');
+    document.getElementById('mic-btn').classList.remove('active');
+    return;
+  }
+  startListening(true);
+}
+
+function startListening(continuous) {
+  const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+  if (!SR) { addMessage('atlas','Reconocimiento de voz no disponible.'); return; }
+  if (isListening) return;
+  continuousMode=continuous;
+  recognition=new SR();
+  recognition.lang='es-ES'; recognition.interimResults=false; recognition.maxAlternatives=3; recognition.continuous=true;
+  recognition.onstart = () => {
+    isListening=true; document.getElementById('mic-btn').classList.add('active');
+    if (waitingCommand) { setCoreState('listening'); setStatus('TE ESCUCHO...'); }
+    else { setCoreState('idle'); setStatus('EN ESPERA — DI "ATLAS"'); }
+  };
+  recognition.onresult = e => {
+    let textos=[];
+    for (let j=0;j<e.results[e.resultIndex].length;j++) textos.push(e.results[e.resultIndex][j].transcript.trim().toLowerCase());
+    const lower=textos[0], text=e.results[e.resultIndex][0].transcript.trim();
+    if (textos.some(t=>/c[aá]llate|alto|silencio|suficiente|basta|desactiv|modo silencio/.test(t))) {
+      stopVoice(); continuousMode=false; waitingCommand=false; wakeWordMode=true; isListening=false;
+      try{recognition&&recognition.stop();}catch(e){}
+      setCoreState('idle'); setStatus('DESACTIVADO');
+      document.getElementById('mic-btn').classList.remove('active');
+      addMessage('atlas','Sistema en reposo.'); return;
+    }
+    const tieneAtlas=textos.some(t=>/atlas|atlás/i.test(t));
+    if (!waitingCommand) {
+      if (tieneAtlas) {
+        const cmd=lower.replace(/.*atlas\s*/i,'').trim();
+        if (cmd.length>1) { addMessage('user',text); recognition.stop(); isListening=false; wakeWordMode=false; askAtlas(cmd); }
+        else { waitingCommand=true; wakeWordMode=false; const c=document.getElementById('core'); c.style.boxShadow='0 0 60px rgba(0,255,136,0.8)'; setTimeout(()=>c.style.boxShadow='',500); setStatus('TE ESCUCHO...'); setCoreState('listening'); recognition.stop(); isListening=false; }
+      }
+    } else { waitingCommand=false; wakeWordMode=true; addMessage('user',text); askAtlas(lower); }
+  };
+  recognition.onerror = e => { isListening=false; if(continuousMode&&e.error!=='not-allowed') setTimeout(()=>{ if(continuousMode&&!isListening) startListening(true); },400); };
+  recognition.onend   = () => {
+    isListening=false;
+    if (!continuousMode) { setCoreState('idle'); setStatus('LISTO'); document.getElementById('mic-btn').classList.remove('active'); return; }
+    if (window.speechSynthesis.speaking) return;
+    if (waitingCommand) setTimeout(()=>{ if(continuousMode&&!isListening) startListening(true); },200);
+    else { wakeWordMode=true; setTimeout(()=>{ if(continuousMode&&!isListening) startListening(true); },300); }
+  };
+  try { recognition.start(); } catch(e) { isListening=false; setTimeout(()=>{ if(continuousMode) startListening(true); },500); }
+}
+
+// ══════════════════════════════════════════════════════
+// PANELS
+// ══════════════════════════════════════════════════════
+const panelIds={music:'music-panel',gps:'gps-panel',yt:'yt-panel'};
+const btnIds  ={music:'btn-music',  gps:'btn-gps',  yt:'btn-yt'  };
+function showPanel(name) { if(!document.getElementById(panelIds[name]).classList.contains('visible')) togglePanel(name); }
+function togglePanel(name) {
+  const pEl=document.getElementById(panelIds[name]), bEl=document.getElementById(btnIds[name]);
+  const isOpen=pEl.classList.contains('visible');
+  Object.keys(panelIds).forEach(k=>{ document.getElementById(panelIds[k]).classList.remove('visible'); document.getElementById(btnIds[k])&&document.getElementById(btnIds[k]).classList.remove('active'); });
+  if (!isOpen) { pEl.classList.add('visible'); bEl&&bEl.classList.add('active'); if(name==='gps') getGPS(); }
+}
+
+// ══════════════════════════════════════════════════════
+// REPRODUCTOR
+// ══════════════════════════════════════════════════════
+const audioPlayer=document.getElementById('audioPlayer');
+let playlist=[], currentIndex=0, shuffleMode=false;
+
+document.getElementById('file-input').addEventListener('change', async e=>{ await loadAndSaveFiles(Array.from(e.target.files)); });
+document.getElementById('folder-input').addEventListener('change', async e=>{
+  const af=Array.from(e.target.files).filter(f=>f.type.startsWith('audio/'));
+  if (!af.length) { addMessage('atlas','No se encontraron archivos de audio.'); return; }
+  await loadAndSaveFiles(af);
+});
+
+async function loadAndSaveFiles(files) {
+  addMessage('atlas',`Guardando ${files.length} canción(es)...`); showToast('GUARDANDO MÚSICA...');
+  for (const f of files) await saveSongToDB(f);
+  await refreshPlaylistFromDB();
+  showToast(`✓ ${files.length} CANCIÓN(ES) GUARDADAS`);
+  addMessage('atlas',`${playlist.length} canción(es) disponibles.`);
+  if (playlist.length>0) playIndex(0);
+}
+async function refreshPlaylistFromDB() {
+  const songs=await loadSongsFromDB();
+  playlist=songs.map(s=>({ id:s.id, name:s.name, url:s.data, dbId:s.id }));
+  currentIndex=0; renderPlaylist(); updateMusicCount();
+}
+function updateMusicCount() {
+  document.getElementById('music-count').textContent=playlist.length>0?`${playlist.length} canción(es) en memoria`:'';
+}
+function renderPlaylist() {
+  const pl=document.getElementById('playlist'); pl.innerHTML='';
+  playlist.forEach((song,i)=>{
+    const div=document.createElement('div');
+    div.className='playlist-item'+(i===currentIndex?' playing':'');
+    div.innerHTML=`<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${i+1}. ${song.name}</span><span class="del-song" onclick="deleteSong(event,${i})">✕</span>`;
+    div.onclick=e=>{ if(!e.target.classList.contains('del-song')) playIndex(i); };
+    pl.appendChild(div);
+  });
+}
+async function deleteSong(e,index) {
+  e.stopPropagation();
+  await deleteSongFromDB(playlist[index].dbId);
+  if (index===currentIndex) { audioPlayer.pause(); audioPlayer.src=''; document.getElementById('now-playing').textContent='Sin canciones'; }
+  await refreshPlaylistFromDB(); showToast('CANCIÓN ELIMINADA');
+}
+async function clearAllMusic() {
+  if (!confirm('¿Eliminar todas las canciones?')) return;
+  await clearAllSongsFromDB(); playlist=[]; audioPlayer.pause(); audioPlayer.src='';
+  document.getElementById('now-playing').textContent='Sin canciones cargadas';
+  renderPlaylist(); updateMusicCount(); showToast('MÚSICA ELIMINADA'); addMessage('atlas','Memoria musical limpiada.');
+}
+function playIndex(i) {
+  if (!playlist.length) return;
+  deezerMode = false; // al reproducir local, salir de modo Deezer
+  currentIndex=(i+playlist.length)%playlist.length;
+  audioPlayer.src=playlist[currentIndex].url;
+  audioPlayer.volume=parseFloat(document.getElementById('volume-bar').value);
+  audioPlayer.play().catch(()=>{});
+  document.getElementById('now-playing').textContent='♪ '+playlist[currentIndex].name;
+  renderPlaylist(); setPlayBtn();
+}
+audioPlayer.addEventListener('ended', handleSongEnd);
+function togglePlay() {
+  if (deezerMode && deezerPlaylist.length) { audioPlayer.paused?audioPlayer.play():audioPlayer.pause(); setPlayBtn(); return; }
+  if(!playlist.length) return; audioPlayer.paused?audioPlayer.play():audioPlayer.pause(); setPlayBtn();
+}
+function setPlayBtn() { document.getElementById('play-btn').textContent=audioPlayer.paused?'▶':'⏸'; }
+audioPlayer.addEventListener('play',setPlayBtn); audioPlayer.addEventListener('pause',setPlayBtn);
+function nextSong() {
+  if (deezerMode && deezerPlaylist.length) { playDeezer(deezerIndex+1); return; }
+  if(!playlist.length) return; shuffleMode?playIndex(Math.floor(Math.random()*playlist.length)):playIndex(currentIndex+1);
+}
+function prevSong() {
+  if (deezerMode && deezerPlaylist.length) { playDeezer(deezerIndex-1); return; }
+  if(!playlist.length) return; playIndex(currentIndex-1);
+}
+function setVolume(v) { audioPlayer.volume=parseFloat(v); }
+function toggleShuffle() { shuffleMode=!shuffleMode; document.getElementById('shuffle-btn').classList.toggle('shuffle-on',shuffleMode); }
+
+// ══════════════════════════════════════════════════════
+// GPS
+// ══════════════════════════════════════════════════════
+function getGPS() {
+  const el=document.getElementById('gps-coords');
+  if (!navigator.geolocation) { el.textContent='GPS no disponible.'; return; }
+  el.textContent='Obteniendo ubicación...';
+  navigator.geolocation.getCurrentPosition(
+    pos=>{ el.textContent=`📍 Lat: ${pos.coords.latitude.toFixed(5)}  Lon: ${pos.coords.longitude.toFixed(5)}  (±${Math.round(pos.coords.accuracy)}m)`; },
+    err=>{ el.textContent='Error: '+err.message; },
+    { enableHighAccuracy:true, timeout:8000 }
+  );
+}
+function navigateTo() { const d=document.getElementById('gps-input').value.trim(); if(!d){addMessage('atlas','Ingrese un destino.');return;} openMapsNavigation(d); }
+function openMapsNavigation(d) { window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(d)}&travelmode=driving`,'_blank'); }
+
+// ══════════════════════════════════════════════════════
+// YOUTUBE / OTRAS APPS
+// ══════════════════════════════════════════════════════
+function searchYouTube() { const q=document.getElementById('yt-search-input').value.trim(); if(!q){addMessage('atlas','¿Qué deseas buscar?');return;} window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,'_blank'); }
+document.getElementById('yt-search-input').addEventListener('keydown',e=>{ if(e.key==='Enter') searchYouTube(); });
+function openWhatsApp() { window.open('https://wa.me','_blank'); }
+function openChrome()   { window.open('https://www.google.com','_blank'); }
+
+// ══════════════════════════════════════════════════════
+// WAKE LOCK
+// ══════════════════════════════════════════════════════
+let wakeLock=null;
+async function requestWakeLock() { try { if('wakeLock' in navigator) wakeLock=await navigator.wakeLock.request('screen'); } catch(e){} }
+requestWakeLock();
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') requestWakeLock(); });
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+async function init() {
+  await initDB();
+  await refreshPlaylistFromDB();
+  if (playlist.length>0) addMessage('atlas',`${playlist.length} canción(es) cargadas. Sistema listo.`);
+}
+init();
+</script>
+</body>
+</html>
